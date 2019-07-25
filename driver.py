@@ -1,8 +1,8 @@
 from firedrake import *
 from glueplex import make_periodic_mesh
 
-mesh = UnitSquareMesh(30, 30, reorder=False)
-# mesh = Mesh("square_with_hole.msh", reorder=False)
+# mesh = UnitSquareMesh(30, 30, reorder=False)
+mesh = Mesh("square_with_hole.msh", reorder=False)
 
 class Mapping():
 
