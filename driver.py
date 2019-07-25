@@ -1,8 +1,8 @@
 from firedrake import *
 from glueplex import make_periodic_mesh
 
-# mesh = UnitSquareMesh(30, 30, reorder=False)
-mesh = Mesh("square_with_hole.msh", reorder=False)
+mesh = UnitSquareMesh(4, 4, reorder=False)
+# mesh = Mesh("square_with_hole.msh", reorder=False)
 
 class Mapping():
 
@@ -25,3 +25,5 @@ periodic_mesh = make_periodic_mesh(mesh, mapping)
 W = VectorFunctionSpace(periodic_mesh, "CG", 1)
 w = Function(W).interpolate(SpatialCoordinate(periodic_mesh))
 File("test.pvd").write(w)
+
+import IPython; IPython.embed()

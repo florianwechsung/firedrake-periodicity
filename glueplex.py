@@ -1,5 +1,6 @@
 import numpy as np
 from firedrake.petsc import PETSc
+from firedrake import dmplex
 import firedrake as fd
 eps = 1e-6
 
@@ -24,6 +25,7 @@ def generate_periodic_plex(dm, mapping):
             dm_section, dm_coordinates, p).reshape(-1, space_dim).mean(axis=0)
 
     is_master = [None] * dm.getChart()[1]
+    is_slave = [None] * dm.getChart()[1]
     old_to_new_number = -np.ones(dm.getChart()[1], dtype=np.int)
     dm_slave_to_master = -np.ones(dm.getChart()[1], dtype=np.int)
     counter = 0
@@ -36,8 +38,8 @@ def generate_periodic_plex(dm, mapping):
         if not mapping.is_slave(x):
             old_to_new_number[p] = counter
             counter += 1
-            is_master[p] = True
         else:
+            is_slave[p] = True
             is_master[p] = False
 
     for p in range(*dm_vertices):
@@ -52,6 +54,8 @@ def generate_periodic_plex(dm, mapping):
                 if np.linalg.norm(mapx-y) < eps:
                     old_to_new_number[p] = old_to_new_number[q]
                     dm_slave_to_master[p] = q
+                    is_slave[q] = False
+                    is_master[q] = True
                     # print("Master found at y=", y)
                     break
                 if q == dm_vertices[1]-1:
@@ -66,8 +70,8 @@ def generate_periodic_plex(dm, mapping):
         if not mapping.is_slave(x):
             old_to_new_number[p] = counter
             counter += 1
-            is_master[p] = True
         else:
+            is_slave[p] = True
             is_master[p] = False
     for p in range(*dm_edges):
         x = dm_coords(p)
@@ -80,6 +84,8 @@ def generate_periodic_plex(dm, mapping):
                 if np.linalg.norm(mapx-y) < eps:
                     old_to_new_number[p] = old_to_new_number[q]
                     dm_slave_to_master[p] = q
+                    is_slave[q] = False
+                    is_master[q] = True
                     # print(f"Found master for edge {p}({x}): {q}({y})")
                     break
                 if q == dm_edges[1]-1:
@@ -110,6 +116,12 @@ def generate_periodic_plex(dm, mapping):
         pdm.setConeSize(p, 2)
     pdm.setUp()
 
+    def copy_label(label, rpoint, cpoint, new_name=None):
+        if dm.hasLabel(label):
+            if new_name is None:
+                new_name = label
+            pdm.setLabelValue(new_name, rpoint, dm.getLabelValue(label, cpoint))
+
     for dm_edge in range(*dm_edges):
         cone = dm.getCone(dm_edge)
         orient = dm.getConeOrientation(dm_edge)
@@ -117,7 +129,13 @@ def generate_periodic_plex(dm, mapping):
         for i in range(len(cone)):
             pdm_cone[i] = old_to_new_number[cone[i]]
         pdm.setCone(old_to_new_number[dm_edge], pdm_cone, orientation=orient)
-        # print(f"setCone({old_to_new_number[dm_edge]}, {pdm_cone}, orientation={orient})")
+        if dim == 2:
+            if not is_slave[dm_edge]:
+                copy_label("Face Sets", old_to_new_number[dm_edge], dm_edge)
+            if is_master[dm_edge]:
+                copy_label("exterior_facets", old_to_new_number[dm_edge], dm_edge, new_name="interior_facets")
+            elif not is_slave[dm_edge]:
+                copy_label("exterior_facets", old_to_new_number[dm_edge], dm_edge)
 
     for dm_cell in range(*dm_cells):
         cone = dm.getCone(dm_cell)
@@ -126,7 +144,7 @@ def generate_periodic_plex(dm, mapping):
         pdm_orient = orient.copy()
         for i in range(len(cone)):
             pdm_cone[i] = old_to_new_number[cone[i]]
-            if is_master[cone[i]]:
+            if not is_slave[cone[i]]:
                 pdm_orient[i] = orient[i]
             else:
                 dm_vertices_on_slave_edge = [p for p in dm.getTransitiveClosure(cone[i])[0] if dm_vertices[0] <= p < dm_vertices[1]]
@@ -174,7 +192,7 @@ def generate_periodic_plex(dm, mapping):
     # Now set the damn coordinates.
     for old_vertex in range(*dm_vertices):
         old_coords = dm_coords(old_vertex)
-        if is_master[old_vertex]:
+        if not is_slave[old_vertex]:
             idx = old_to_new_number[old_vertex] - pdm_vertices[0]
             pdm_coords_array[idx] = old_coords
 
