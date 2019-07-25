@@ -44,7 +44,7 @@ def generate_periodic_plex(dm, mapping):
         if old_to_new_number[p] == -1:
             x = dm_coords(p)
             mapx = mapping.map_to_master(x)
-            print("Search for master for vertex x=", x)
+            # print("Search for master for vertex x=", x)
             for q in range(*dm_vertices):  # quadratic complexity, fix me
                 if p == q:
                     continue
@@ -52,10 +52,12 @@ def generate_periodic_plex(dm, mapping):
                 if np.linalg.norm(mapx-y) < eps:
                     old_to_new_number[p] = old_to_new_number[q]
                     dm_slave_to_master[p] = q
-                    print("Master found at y=", y)
+                    # print("Master found at y=", y)
                     break
                 if q == dm_vertices[1]-1:
-                    raise RuntimeError
+                    raise RuntimeError(
+                        "Could not find a master for slave vertex at " + str(x)
+                        + "\nExpected master vertex at " + str(mapx))
 
     num_pdm_vertices = counter - num_pdm_cells
 
@@ -78,24 +80,26 @@ def generate_periodic_plex(dm, mapping):
                 if np.linalg.norm(mapx-y) < eps:
                     old_to_new_number[p] = old_to_new_number[q]
                     dm_slave_to_master[p] = q
-                    print(f"Found master for edge {p}({x}): {q}({y})")
+                    # print(f"Found master for edge {p}({x}): {q}({y})")
                     break
                 if q == dm_edges[1]-1:
-                    raise RuntimeError
+                    raise RuntimeError(
+                        "Could not find a master for slave edge at " + str(x)
+                        + "\nExpected master edge at " + str(mapx))
 
-    print(np.vstack((np.asarray(list(range(*dm.getChart()))), old_to_new_number)).T)
+    # print(np.vstack((np.asarray(list(range(*dm.getChart()))), old_to_new_number)).T)
 
     num_pdm_edges = counter - num_pdm_vertices - num_pdm_cells
     pdm_cells = (0, num_pdm_cells)
     pdm_vertices = (num_pdm_cells, num_pdm_cells + num_pdm_vertices)
     pdm_edges = (num_pdm_cells+num_pdm_vertices, num_pdm_cells+num_pdm_vertices+num_pdm_edges)
 
-    print("Number of cells", num_dm_cells, "->", num_pdm_cells)
-    print("pdm_cells", (pdm_cells))
-    print("Number of vertices", num_dm_vertices, "->", num_pdm_vertices)
-    print("pdm_vertices", (pdm_vertices))
-    print("Number of edges", num_dm_edges, "->", num_pdm_edges)
-    print("pdm_edges", (pdm_edges))
+    # print("Number of cells", num_dm_cells, "->", num_pdm_cells)
+    # print("pdm_cells", (pdm_cells))
+    # print("Number of vertices", num_dm_vertices, "->", num_pdm_vertices)
+    # print("pdm_vertices", (pdm_vertices))
+    # print("Number of edges", num_dm_edges, "->", num_pdm_edges)
+    # print("pdm_edges", (pdm_edges))
     pdm = PETSc.DMPlex().create(comm=dm.comm)
     dim = dm.getDimension()
     pdm.setChart(0, pdm_edges[1])
@@ -113,7 +117,7 @@ def generate_periodic_plex(dm, mapping):
         for i in range(len(cone)):
             pdm_cone[i] = old_to_new_number[cone[i]]
         pdm.setCone(old_to_new_number[dm_edge], pdm_cone, orientation=orient)
-        print(f"setCone({old_to_new_number[dm_edge]}, {pdm_cone}, orientation={orient})")
+        # print(f"setCone({old_to_new_number[dm_edge]}, {pdm_cone}, orientation={orient})")
 
     for dm_cell in range(*dm_cells):
         cone = dm.getCone(dm_cell)
@@ -143,7 +147,7 @@ def generate_periodic_plex(dm, mapping):
                 else:
                     raise RuntimeError
         pdm.setCone(old_to_new_number[dm_cell], pdm_cone, orientation=pdm_orient)
-        print(f"setCone({old_to_new_number[dm_cell]}, {pdm_cone}, orientation={pdm_orient})")
+        # print(f"setCone({old_to_new_number[dm_cell]}, {pdm_cone}, orientation={pdm_orient})")
 
     pdm.symmetrize()
     pdm.stratify()
@@ -173,8 +177,6 @@ def generate_periodic_plex(dm, mapping):
         if is_master[old_vertex]:
             idx = old_to_new_number[old_vertex] - pdm_vertices[0]
             pdm_coords_array[idx] = old_coords
-        else:
-            print("Ignore", old_coords)
 
     pdm_coords.setArray(pdm_coords_array_)
     pdm.setCoordinatesLocal(pdm_coords)
@@ -201,7 +203,13 @@ def make_periodic_mesh(mesh, mapping):
         old_vertices_in_new_numbering = list(
             [old_to_new_number[p] for p in old_vertices_in_cell]
         )
-        assert(set(new_vertices_in_cell) == set(old_vertices_in_new_numbering))
+        if not (set(new_vertices_in_cell) == set(old_vertices_in_new_numbering)):
+            raise RuntimeError(
+                "Vertices in cell %i not the same after applying periodicity."
+                "\nDid you forget to pass `reorder=False` to the Mesh"
+                " constructor?" % cell
+            )
+
         for i in range(3):
             j = old_vertices_in_new_numbering.index(new_vertices_in_cell[i])
             b[Vp.cell_node_list[cell][i], :] = a[V.cell_node_list[cell][j], :]

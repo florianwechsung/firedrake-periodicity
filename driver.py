@@ -21,7 +21,7 @@ class Mapping():
 
 mapping = Mapping()
 periodic_mesh = make_periodic_mesh(mesh, mapping)
-File("periodic.pvd").write(periodic_mesh.coordinates)
+
 W = VectorFunctionSpace(periodic_mesh, "CG", 1)
 w = Function(W).interpolate(SpatialCoordinate(periodic_mesh))
 File("test.pvd").write(w)
