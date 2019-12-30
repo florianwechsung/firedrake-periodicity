@@ -1,7 +1,7 @@
 from firedrake import *
 from glueplex import make_periodic_mesh
 
-n = 8
+n = 16
 mesh = UnitCubeMesh(n, n, n, reorder=False)
 File("mesh.pvd").write(mesh.coordinates)
 mesh = UnitCubeMesh(n, n, n, reorder=False)
@@ -11,6 +11,12 @@ class Mapping():
     def is_slave(self, x):
         eps = 1e-8
         return (x[0] > 1-eps or x[1] > 1-eps or x[2] > 1-eps)
+
+    def is_master(self, x):
+        eps = 1e-8
+        return (x[0] < eps and x[1] <= 1-eps and x[2] <= 1-eps) or \
+            (x[1] < eps and x[0] <= 1-eps and x[2] <= 1-eps) or \
+            (x[2] < eps and x[0] <= 1-eps and x[1] <= 1-eps)
 
     def map_to_master(self, x):
         master = x.copy()

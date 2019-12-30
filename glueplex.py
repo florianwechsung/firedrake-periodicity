@@ -34,6 +34,7 @@ def generate_periodic_plex(dm, mapping):
 
     is_master = [None] * dm.getChart()[1]
     is_slave = [None] * dm.getChart()[1]
+    coords = [None] * dm.getChart()[1]
     old_to_new_number = -np.ones(dm.getChart()[1], dtype=np.int)
     dm_slave_to_master = -np.ones(dm.getChart()[1], dtype=np.int)
     counter = 0
@@ -44,34 +45,35 @@ def generate_periodic_plex(dm, mapping):
     def build_mapping(begin, end, counter):
         for p in range(begin, end):
             x = dm_coords(p)
-            if not mapping.is_slave(x):
+            coords[p] = x
+            if mapping.is_slave(x):
+                is_slave[p] = True
+            else:
+                if mapping.is_master(x):
+                    is_master[p] = True
                 old_to_new_number[p] = counter
                 counter += 1
-            else:
-                is_slave[p] = True
-                is_master[p] = False
 
         for p in range(begin, end):
             if old_to_new_number[p] == -1:
-                x = dm_coords(p)
+                x = coords[p]
                 mapx = mapping.map_to_master(x)
                 # print("Search for master for vertex x=", x)
                 for q in range(begin, end):  # quadratic complexity, fix me
-                    if p == q:
+                    if p == q or not is_master[q]:
                         continue
-                    y = dm_coords(q)
-                    if np.linalg.norm(mapx-y) < eps:
+                    y = coords[q]
+                    if abs(mapx[0]-y[0]) < eps and abs(mapx[1]-y[1]) < eps and abs(mapx[2]-y[2]) < eps:
                         old_to_new_number[p] = old_to_new_number[q]
                         dm_slave_to_master[p] = q
-                        is_slave[q] = False
-                        is_master[q] = True
-                        # print("Master found at y=", y)
                         break
                     if q == dm_vertices[1]-1:
                         raise RuntimeError(
                             "Could not find a master for slave vertex at " + str(x)
                             + "\nExpected master vertex at " + str(mapx))
         return counter
+    import time
+    start = time.time()
     counter = build_mapping(*dm_vertices, counter)
     num_pdm_vertices = counter - num_pdm_cells
     if space_dim == 3:
@@ -81,6 +83,8 @@ def generate_periodic_plex(dm, mapping):
         num_pdm_facets = 0
     counter = build_mapping(*dm_edges, counter)
     num_pdm_edges = counter - num_pdm_vertices - num_pdm_cells - num_pdm_facets
+    end = time.time()
+    print("Time for mapping", end-start)
     # print(np.vstack((np.asarray(list(range(*dm.getChart()))), old_to_new_number)).T)
 
     pdm_cells = (0, num_pdm_cells)
